@@ -79,6 +79,7 @@ plt.title('xP by Shot Distance')
 plt.xlabel('Feet from Hoop')
 plt.ylabel('Expected Points (xP)')
 plt.legend()
+plt.savefig('xp_trend_analysis.png', dpi=300)
 plt.show()
 ```
 
@@ -111,7 +112,9 @@ volume_shooters = player_stats[player_stats['mid_range_attempts'] >= 50].copy()
 plt.figure(figsize=(8, 6))
 stats.probplot(volume_shooters['mid_range_xp'], dist="norm", plot=plt)
 plt.title('Player Mid Range Expected Points')
+plt.savefig('shooter_qq.png')
 plt.grid(True)
+plt.savefig('shooter_qq_plot.png', dpi=300)
 plt.show()
 ```
 
@@ -141,6 +144,7 @@ plt.figure(figsize=(10, 5))
 sns.barplot(data=comparison_df, x='Category', y='Expected Points (xP)', palette='viridis')
 plt.axhline(league_c3_xp, color='red', linestyle='--', label='Corner 3 Benchmark')
 plt.title('Elite Mid Range Value vs. League Benchmarks')
+plt.savefig('elite_comparison.png', dpi=300)
 plt.show()
 ```
 
@@ -158,3 +162,27 @@ While the 'deadzone' is a reality for the majority of the NBA, a players skill c
 This analysis looked at the distance away from the basket to determine a 'deadzone'; but it might rather exist because mid range shots are more often contested. Instead corner threes could allow a player more time to shoot, and therefore increase their **xP**. Using the **CLOSE_DEF_DIST** column in a regression would allow me to determine if the dip in shot value is due to contesting shots. 
 
 Because the dataset lacked (x,y) coordinates, corner threes were estimated based on the distance of shot and **SHOT_TYPE**. Using more precise coordinates would allow me to gather more accurate data on the **xP** from the corner three zone. 
+
+
+
+
+
+```{python}
+#CODE TO RENDER PLOTS IN MY README
+# --- FINAL EXPORT CHUNK ---
+# This recreates the important visuals and saves them for GitHub
+
+# Save Trend Plot
+plt.figure(figsize=(10, 6))
+sns.lineplot(data=dist_efficiency, x='SHOT_DIST', y='avg_xP')
+plt.axvspan(10, 16, color='red', alpha=0.2)
+plt.axvspan(22, 24, color='green', alpha=0.2)
+plt.savefig('xp_trend_analysis.png')
+plt.close() # Closes it so it doesn't double-print in your PDF
+
+# Save Bar Chart
+plt.figure(figsize=(10, 5))
+sns.barplot(data=comparison_df, x='Category', y='Expected Points (xP)')
+plt.savefig('elite_comparison.png')
+plt.close()
+```
