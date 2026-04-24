@@ -1,0 +1,160 @@
+---
+title: "Applied Statistical Analysis in Sports"
+author: "Kiernan McKeegan"
+format:
+  html: default
+  pdf: default
+fontsize: 11pt
+---
+
+# 1. Sport Background
+Basketball is a sport entirely about speed and accuracy. Without one or the other, the participant cannot succeed. It is a game involving two teams, each with five players out at a time. The goal is to score the most points, while preventing the other team from scoring as many as they can. Points are earned by succesfully making a shot with a ball that falls into an elevated hoop. For the purpose of this paper, the scoring areas are divided into two zones. Any shot made from outside a radius of ~22 feet will count for **3 points**. Any shot made, in fair play, from inside the 20 foot arc will count for **2 points**. The geometry is slightly skewed though, the very sides of the court where a player would be parallel to the hoop is the closest distance one can possibly be while making a 3 pointer, such a shot is called a corner three. This is because the sides of the arc straighten out before reaching 180 degrees. There is also a **'Shot Clock'**, which limits the amount of time each team may have the ball in an attempt to make a shot contributing toward their team. If a change of possession or points do not occur within the limit (30 seconds), then possession automatically changes to the other team. This limit imposes pressure on teams to take risky shots and run up the score, rather than pass around indefinetely looking for a perfect shot.
+
+While it may seem obvious, any shot made from > 22 feet counts for **50%** more than a shot made from < 22 feet, so why don't players only take 3 pointers? The only advantage to take shots from inside the radius is because they are easier to make. However, how much is the risk worth to take a shot from 21.99 feet rather than a foot back and take a risk to gain an extra point? Within this project I will be examining such a statistic, gauging the value of a shot to examine if there is a dead zone, and optimizing the most effective shots to take based on each player.
+
+# 2. Thesis
+Within this project I aim to answer one key question: Does the mid-range deadzone (10-16 feet) create a statistically significant lower Expected Points value compared to corner three pointers made from the 2014-2015 NBA season, and how could this vary for elite shooters? 
+
+This question seems interesting to me since I know that it has been asked within the University of Arizona coaching staff. I would like to end up in a career for sports statistics, so by practicing answering these types of questions I make myself more in touch with coaches. By completing this analysis I expect to find ways that players can optimize their performance and improve areas of their game. 
+
+# 3. Data
+
+For this assignment I found data off of Kaggle that contained shot logs for an entire season. I was able to obtain this data by downloading it as a CSV and importing it into the folder within my project. The CSV file documented many variables such as:
+
+* **SHOT_DIST**-The distance in feet from the center of the hoop
+* **PTS_TYPE**-Whether the shot was a 2 point or 3 point attempt
+* **SHOT_RESULT**-Categorical variable describing whether the shot was made or missed, dependent variable
+* **CLOSE_DEF_DIST**-The distance of the nearest defender, which accounts for openess
+* **DRIBBLES**-The number of dribbles taken before the shot, distinguishing 'catch and shoot' and 'off the dribble' shots
+
+There are several limitations to the data. Firstly it does not include exact coordinates of the player on the court, only the radial distance from the basket. This means that corner threes must be inferred by filtering specifically for 3 pointers made at 22-24 feet. The data is also over 10 years old, over time the offesnive efficiency and accuracy has changed lots in the NBA, simple shifts in scouting could completely alter how often different types of shots are made. 
+
+# 4. Analysis
+
+The heart of this analysis relies on the concept of Expectation and the Central limit theorem. By calculating the Expected Points (**xP**), it gives me the freedom to weigh the trade off between a high probability, low reward shot; and a low probability, high reward shot. The formula for **xP** is: 
+$$xP = \text{Point Value} \times P(\text{Make})$$
+
+**P(Make)** is the field goal percentage calculated from the data for the type of shot zone. In this project, we define two types of zones based on **SHOT_DIST**. The midrange deadzone are shots taken between 10 and 16 feet; while the corner threes are shots taken between 22 and 24 feet. 
+
+First we need to import the CSV and convert it into a dataframe. Afterwards we need to clean **SHOT_RESULT**, to convert 'made' and 'missed' into binary values. 
+```{python}
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Hypothetical data loading
+bball=pd.read_csv('shot_logs.csv')
+#1 represents a basket made, 0 represents a miss
+bball['FGM']=bball['SHOT_RESULT'].map({'made':1, 'missed':0})
+```
+
+Next I will create the mid range 'dead' zone and corner three areas, filtering by **PTS_TYPE** to ensure correct mapping.
+
+```{python}
+#Create the Mid range zone (10-16 feet)
+mid_range=bball[(bball['SHOT_DIST'] >=10)&(bball['SHOT_DIST']<=16)].copy()
+mid_range['xP']=mid_range['FGM']*2
+#Create the Corner Three zone (22-24 feet, 3PT attempts)
+corner_3=bball[(bball['SHOT_DIST'] >=22)&(bball['SHOT_DIST']<=24)&(bball['PTS_TYPE'] ==3)].copy()
+corner_3['xP']=corner_3['FGM']*3
+# Display the mean values for comparison
+print(f"Mid-range Mean xP:{mid_range['xP'].mean():.3f}")
+print(f"Corner 3 Mean xP:{corner_3['xP'].mean():.3f}")
+```
+
+In order to visualize why the 10-16 foot range is referred to as a deadzone, I can plot the average **xP** from every distance. This will show a dip in the value of shots that occur within this range. 
+
+```{python}
+#Grouping data by distance 
+dist_efficiency = bball.groupby('SHOT_DIST').apply(lambda x: (x['FGM'] * x['PTS_TYPE']).mean()).reset_index(name='avg_xP')
+
+#Plotting the trend
+import seaborn as sns
+import matplotlib.pyplot as plt
+plt.figure(figsize=(10, 6))
+sns.lineplot(data=dist_efficiency, x='SHOT_DIST', y='avg_xP')
+plt.axvspan(10, 16, color='red', alpha=0.2, label='Mid-range Deadzone')
+plt.axvspan(22, 24, color='green', alpha=0.2, label='Corner 3 Zone')
+plt.title('xP by Shot Distance')
+plt.xlabel('Feet from Hoop')
+plt.ylabel('Expected Points (xP)')
+plt.legend()
+plt.show()
+```
+
+To ensure the data is accurate and meaningful, I will perform a two tailed hypothesis test on the two zones. This will determine whether the difference in **xP** between the 'deadzone' and corner three is statistically signficant and not due to random chance. 
+
+```{python}
+from scipy import stats
+#Perform a two sample t-test
+t_stat, p_val = stats.ttest_ind(mid_range['xP'], corner_3['xP'], equal_var=False)
+
+print(f"T-statistic: {t_stat:.4f}")
+print(f"P-value: {p_val:.10f}")
+```
+
+Since the t statistic is so high and p value is nearly 0, this means the data we are given is meaningful, and there is a significant difference in **xP** than can create a deadzone. 
+
+I also want to observe if the thesis holds true for elite shooters. Elite shooters would be players who are in the top quartile of field goal percentage. I can first create a QQ plot to identify these outliers.
+
+
+```{python}
+import scipy.stats as stats
+# Aggregate mid range performance by player
+player_stats = mid_range.groupby('player_name').agg(
+    mid_range_fgm=('FGM', 'sum'),
+mid_range_attempts=('FGM', 'count'),mid_range_xp=('xP', 'mean')).reset_index()
+#Filter for min 50 shots to avoid small sample size noise
+volume_shooters = player_stats[player_stats['mid_range_attempts'] >= 50].copy()
+
+#Create QQ plot
+plt.figure(figsize=(8, 6))
+stats.probplot(volume_shooters['mid_range_xp'], dist="norm", plot=plt)
+plt.title('Player Mid Range Expected Points')
+plt.grid(True)
+plt.show()
+```
+
+The QQ plot displays the players that are above the average, who can be considered elite shooters. I'll select the top player to be used as a comparison.
+
+```{python}
+#Identify the player with highest mid-range xP
+elite_player_row = volume_shooters.sort_values(by='mid_range_xp', ascending=False).iloc[0]
+elite_name = elite_player_row['player_name']
+elite_xp = elite_player_row['mid_range_xp']
+
+print(f"The top mid range shooter is: {elite_name.title()}")
+print(f"Elite Mid Range xP: {elite_xp:.3f}")
+```
+
+Stephen Curry's **xP** is 1.178, meaning if he took 100 shots he would score 117.8 points. Finally I'll compare his **xP** to the league average and see if my thesis still holds, or if skill can bridge the deadzone and corner dip.
+
+```{python}
+# Calculate League Average Corner 3 xP again
+league_c3_xp = corner_3['xP'].mean()
+league_mid_xp = mid_range['xP'].mean()
+comparison_df = pd.DataFrame({'Category': [f'Elite ({elite_name.title()}) Mid-Range', 'League Avg Corner 3', 'League Avg Mid-Range'],'Expected Points (xP)': [elite_xp, league_c3_xp, league_mid_xp]})
+print(comparison_df)
+
+#Visual comparison
+plt.figure(figsize=(10, 5))
+sns.barplot(data=comparison_df, x='Category', y='Expected Points (xP)', palette='viridis')
+plt.axhline(league_c3_xp, color='red', linestyle='--', label='Corner 3 Benchmark')
+plt.title('Elite Mid Range Value vs. League Benchmarks')
+plt.show()
+```
+
+As we can see Stephen Curry's mid range **xP** is not only significantly higher than the leagues' average, it is also slightly higher than the league average for the corner three zone. This means for elite players like Stephen Curry, there is no such area as a 'deadzone', and he is able to shoot from anywhere while still having value in his shots. However this likely implies that a shot from 2-3 feet back behind the 3 pointer line would not lose that much value since his accuracy is likely still high. 
+
+# 5. Conclusion
+Based on the analysis of the NBA shot logs, I can conclude that the 'mid range deadzone' does exist and contributes to lowering a players **xP**. The results of the hypothesis testing signify to reject the null hypothesis, and state that the difference in **xP** between corner threes and mid range shots is significant.  
+
+For an average NBA player, the mid range shot is inefficient. The dip in points visualized by the graphs confirms that as players move away from the basket, the value of their shot decreases since the loss in accuracy does not compensate for only 2 points. However, this thesis does not apply for elite shooter. As observed with stephen curries data, the value of his shot is actually higher than the value of a shot from a corner three in the league average. This means elite players are rewarded for their accuracy by having a higher **xP**. Taking into consideration how much more value a shot could have from the 3 point line from an elite shooter might be substantially more though. 
+
+While the 'deadzone' is a reality for the majority of the NBA, a players skill can override the inefficiency of a mid range shot. This signifies to coaches new strategies involving different players skillsets will benefit them more. 
+
+# 6. Areas of Improvement
+
+This analysis looked at the distance away from the basket to determine a 'deadzone'; but it might rather exist because mid range shots are more often contested. Instead corner threes could allow a player more time to shoot, and therefore increase their **xP**. Using the **CLOSE_DEF_DIST** column in a regression would allow me to determine if the dip in shot value is due to contesting shots. 
+
+Because the dataset lacked (x,y) coordinates, corner threes were estimated based on the distance of shot and **SHOT_TYPE**. Using more precise coordinates would allow me to gather more accurate data on the **xP** from the corner three zone. 
